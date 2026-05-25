@@ -41,17 +41,18 @@ fn main() -> Result<()> {
     let mut args = Args::parse();
 
     // 处理路径末尾的斜杠，直接忽略
-    args.game_dir = args.game_dir.trim_end_matches(|c| c == '/' || c == '\\').to_string();
+    // 增加处理 Windows 命令行转义问题：当路径以 \" 结尾时，引号会被误认为是路径的一部分
+    args.game_dir = args.game_dir.trim_matches('"').trim_end_matches(|c| c == '/' || c == '\\').to_string();
     if args.game_dir.is_empty() {
         args.game_dir = ".".to_string();
     }
 
     for e in &mut args.exclude {
-        *e = e.trim_end_matches(|c| c == '/' || c == '\\').to_string();
+        *e = e.trim_matches('"').trim_end_matches(|c| c == '/' || c == '\\').to_string();
     }
 
     if !args.index.starts_with("http://") && !args.index.starts_with("https://") {
-        args.index = args.index.trim_end_matches(|c| c == '/' || c == '\\').to_string();
+        args.index = args.index.trim_matches('"').trim_end_matches(|c| c == '/' || c == '\\').to_string();
     }
 
     let game_dir = Path::new(&args.game_dir);
