@@ -16,6 +16,10 @@ struct Args {
     #[arg(short, long, default_value = "modrinth.index.json")]
     index: String,
 
+    /// Minecraft root directory
+    #[arg(short, long, default_value = ".")]
+    game_dir: String,
+
     /// Folders to ignore (e.g., -e tacz -e resourcepacks)
     #[arg(short, long)]
     exclude: Vec<String>,
@@ -35,8 +39,10 @@ struct Args {
 
 fn main() -> Result<()> {
     let args = Args::parse();
+    let game_dir = Path::new(&args.game_dir);
 
     println!("--- Minecraft Mod 增量更新器 ---");
+    println!("Minecraft 目录: {}", game_dir.display());
     if !args.exclude.is_empty() {
         println!("正在忽略目录: {:?}", args.exclude);
     }
@@ -46,7 +52,7 @@ fn main() -> Result<()> {
     println!("索引加载成功: {} (版本: {})", index.name, index.version_id);
 
     println!("正在扫描本地文件...");
-    let local_files = scanner::scan_local_files(&args.exclude);
+    let local_files = scanner::scan_local_files(game_dir, &args.exclude);
     
     let mut index_files_map = HashMap::new();
     for file in &index.files {
@@ -68,7 +74,8 @@ fn main() -> Result<()> {
 
     // 检查本地已存在的文件
     for local_path in local_files {
-        let path_str = local_path.to_str().unwrap().replace("\\", "/");
+        let rel_path = local_path.strip_prefix(game_dir).context("Failed to strip prefix")?;
+        let path_str = rel_path.to_str().unwrap().replace("\\", "/");
         local_paths_found.insert(path_str.clone());
 
         if let Some(index_file) = index_files_map.get(&path_str) {
@@ -151,12 +158,12 @@ fn main() -> Result<()> {
 
         for file in &to_download_files {
             println!("\n正在处理: {}", file.path);
-            let dest = Path::new(&file.path);
+            let dest = game_dir.join(&file.path);
             if let Some(parent) = dest.parent() {
                 fs::create_dir_all(parent)?;
             }
 
-            match dl.download_with_fallback(&file.downloads, dest) {
+            match dl.download_with_fallback(&file.downloads, &dest) {
                 Ok(_) => {
                     println!("  [成功] 已完成: {}", file.path);
                     success_count += 1;
