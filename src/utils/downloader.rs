@@ -1,17 +1,34 @@
 use std::process::Command;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use anyhow::{Result, Context};
+use std::env;
 
 pub struct Downloader {
-    aria2_path: String,
+    aria2_path: PathBuf,
     connections: u32,
     split: u32,
 }
 
 impl Downloader {
     pub fn new(connections: u32, split: u32) -> Self {
+        let exe_path = env::current_exe().unwrap_or_default();
+        let exe_dir = exe_path.parent().unwrap_or_else(|| Path::new("."));
+        let aria2_path = exe_dir.join("3rd").join("aria2c.exe");
+        
+        // 如果在开发环境下（target/debug），可能需要向上找一级或直接使用当前工作目录
+        let aria2_path = if !aria2_path.exists() {
+            let work_dir_path = Path::new("3rd/aria2c.exe");
+            if work_dir_path.exists() {
+                work_dir_path.to_path_buf()
+            } else {
+                aria2_path
+            }
+        } else {
+            aria2_path
+        };
+
         Self {
-            aria2_path: "3rd/aria2c.exe".to_string(),
+            aria2_path,
             connections,
             split,
         }
@@ -48,7 +65,7 @@ impl Downloader {
                     println!("  [失败] 该源不可用，尝试下一个...");
                 }
                 Err(e) => {
-                    last_error = format!("无法执行 aria2c: {}", e);
+                    last_error = format!("无法执行 aria2c: {} (路径: {})", e, self.aria2_path.display());
                     println!("  [错误] 启动 aria2c 失败: {}", e);
                 }
             }

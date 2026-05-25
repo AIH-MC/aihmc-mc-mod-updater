@@ -17,7 +17,7 @@ struct Args {
     index: String,
 
     /// Minecraft root directory
-    #[arg(short, long, default_value = ".")]
+    #[arg(short, long, default_value = "")]
     game_dir: String,
 
     /// Folders to ignore (e.g., -e tacz -e resourcepacks)
@@ -40,19 +40,40 @@ struct Args {
 fn main() -> Result<()> {
     let mut args = Args::parse();
 
-    // 处理路径末尾的斜杠，直接忽略
-    // 增加处理 Windows 命令行转义问题：当路径以 \" 结尾时，引号会被误认为是路径的一部分
-    args.game_dir = args.game_dir.trim_matches('"').trim_end_matches(|c| c == '/' || c == '\\').to_string();
     if args.game_dir.is_empty() {
-        args.game_dir = ".".to_string();
+        args.game_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|parent| parent.to_string_lossy().to_string()))
+            .unwrap_or_else(|| ".".to_string());
     }
 
+    // 彻底解决路径问题：
+    // 1. 先将所有反斜杠统一替换为正斜杠
+    args.game_dir = args.game_dir.replace("\\", "/");
+    
+    // 2. 处理 Windows 命令行转义问题：当路径以 \" 结尾时，引号会被误认为是路径内容
+    //    如果路径中包含双引号，则截取第一个双引号之前的内容
+    if let Some(pos) = args.game_dir.find('"') {
+        args.game_dir = args.game_dir[..pos].to_string();
+    }
+
+    // 3. 移除末尾多余的空格和正斜杠
+    args.game_dir = args.game_dir.trim().trim_end_matches('/').to_string();
+
     for e in &mut args.exclude {
-        *e = e.trim_matches('"').trim_end_matches(|c| c == '/' || c == '\\').to_string();
+        let mut cleaned = e.replace("\\", "/");
+        if let Some(pos) = cleaned.find('"') {
+            cleaned = cleaned[..pos].to_string();
+        }
+        *e = cleaned.trim().trim_end_matches('/').to_string();
     }
 
     if !args.index.starts_with("http://") && !args.index.starts_with("https://") {
-        args.index = args.index.trim_matches('"').trim_end_matches(|c| c == '/' || c == '\\').to_string();
+        let mut cleaned = args.index.replace("\\", "/");
+        if let Some(pos) = cleaned.find('"') {
+            cleaned = cleaned[..pos].to_string();
+        }
+        args.index = cleaned.trim().trim_end_matches('/').to_string();
     }
 
     let game_dir = Path::new(&args.game_dir);
